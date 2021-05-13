@@ -1,9 +1,6 @@
 import requests
 import os
 
-s = requests.Session() 
-# all cookies received will be stored in the session object
-
 #-----------------------------
 # directories
 #-----------------------------
@@ -12,8 +9,15 @@ COOKIE_DIR = os.path.join(WORKING_DIR, 'cookie.txt')
 HEADER_DIR = os.path.join(WORKING_DIR, 'request_header.txt')
 OUTPUT_DIR = os.path.join(WORKING_DIR, 'response.html')
 
+#-----------------------------
+# target url
+#-----------------------------
 url = 'https://cool.ntu.edu.tw/courses/4641'
 
+
+#-----------------------------
+# directories
+#-----------------------------
 headers = {}
 with open(HEADER_DIR, 'r') as f:
     lines = f.readlines()
@@ -26,10 +30,13 @@ with open(HEADER_DIR, 'r') as f:
         raw_cookie = ''.join(f.readlines())
         headers['Cookie'] = raw_cookie
 
+
+#-----------------------------
+# get course homepage response
+#-----------------------------
+s = requests.Session() 
 r = s.get(url, headers=headers)
 
 with open(OUTPUT_DIR, 'w', encoding='utf-8') as f:
     f.write(r.text)
 
-for key, value in r.headers.items():
-    print(f'{key}: {value}')
