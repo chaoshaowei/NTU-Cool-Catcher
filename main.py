@@ -71,12 +71,11 @@ post_headers = {}
 # get course homepage response
 #-----------------------------
 s = requests.Session()
-'''
+
 r = s.get(URL, headers=headers)
 
 with open(OUTPUT1_DIR, 'w', encoding='utf-8') as f:
     f.write(r.text)
-'''
 
 with open(OUTPUT1_DIR, 'r', encoding='utf-8') as f:
     text = '\n'.join(f.readlines())
