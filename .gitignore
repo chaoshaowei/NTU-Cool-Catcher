@@ -1,4 +1,6 @@
 cookie.txt
 Responses/**
 Download/**
-
+*.code-workspace
+*.db
+__pycache__/**
