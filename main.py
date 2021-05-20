@@ -6,15 +6,22 @@ import re
 from html.parser import HTMLParser
 import database
 
-database.check_db()
-
-DEBUG = True
+#-----------------------------
+# flags
+#-----------------------------
+DEBUG = False
+SAVE_RESPONSE = True
 
 #-----------------------------
 # target url
 #-----------------------------
 HOST = 'https://cool.ntu.edu.tw'
-COURSE_NUM = '5607'
+COURSE_NUMS = ['4641', '6153']
+try:
+    COURSE_NUM = COURSE_NUMS[0]
+except IndexError:
+    print('Empty Download list')
+    exit()
 PATH = '/courses/' + COURSE_NUM
 URL = HOST+PATH
 
@@ -42,18 +49,8 @@ try:
     os.mkdir(os.path.join(WORKING_DIR, 'Responses'))
 except FileExistsError:
     pass
-
 DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'Download', COURSE_NUM)
 DOWNLOAD_SUBDIR = 'default'
-try:
-    os.mkdir(os.path.join(WORKING_DIR, 'Download'))
-except FileExistsError:
-    pass
-try:
-    os.mkdir(DOWNLOAD_DIR)
-except FileExistsError:
-    pass
-
 
 #-----------------------------
 # define functions
@@ -95,6 +92,7 @@ class HomepageParser(HTMLParser):
 
     # Individual item
     # finds <div class='module-item-title'>
+    in_h1 = False
     in_item = False
     item_depth = 0
     current_item_type = 'NAN'
@@ -102,7 +100,9 @@ class HomepageParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
-        if (tag == 'div'):
+        if(tag == 'h1'):
+            self.in_h1 = True
+        elif (tag == 'div'):
             self.depth += 1
             # Find module
             if 'id' in attrs_dict:
@@ -110,7 +110,8 @@ class HomepageParser(HTMLParser):
                     self.foundContent = True
                     self.in_module_body = True
                     self.module_body_depth = self.depth
-                    print(f'found module at div depth ({self.depth})')
+                    if DEBUG:
+                        print(f'found module at div depth ({self.depth})')
             if 'class' in attrs_dict:
                 # Find topics
                 if (attrs_dict['class'].startswith('item-group-condensed')):
@@ -148,6 +149,13 @@ class HomepageParser(HTMLParser):
                 self.in_module_body = False
         if (tag == 'div'):
             self.depth -= 1
+        elif(tag == 'h1'):
+            self.in_h1 = False
+    
+    def handle_data(self, data: str) -> None:
+        if(self.in_h1):
+            if(not 'javascript' in data.lower()):
+                print(data)
     
     def getItemResource(self, path: str, pageType: str):
         try:
@@ -169,8 +177,9 @@ class HomepageParser(HTMLParser):
                 except ssl.SSLError as e:
                     print(e)
 
-        with open(OUTPUT2_DIR, 'w', encoding='utf-8') as f:
-            f.write(itemRespond.text)
+        if SAVE_RESPONSE:
+            with open(OUTPUT2_DIR, 'w', encoding='utf-8') as f:
+                f.write(itemRespond.text)
         
         if pageType == 'Attachment':
             parserA = AttachmentParser()
@@ -194,13 +203,15 @@ class VideoParser(HTMLParser):
     Usage:
     - VideoParser().feed(URL)
     '''
-
     in_form = False
     form_action_url = ''
 
     form_data = {}
 
     item_id = 0
+    is_delayed = False
+
+    delay_message = '\t\t\t\t'
 
     def handle_starttag(self, tag, attrs):
         attrs_dict = dict(attrs)
@@ -209,6 +220,9 @@ class VideoParser(HTMLParser):
             self.form_action_url = attrs_dict['action']
         elif (tag == 'input'):
             self.form_data[attrs_dict['id']] = attrs_dict['value']
+        elif (tag == 'br'):
+            self.is_delayed = False
+            print(self.delay_message)
 
     def handle_endtag(self, tag):
         if (tag == 'form'):
@@ -234,10 +248,11 @@ class VideoParser(HTMLParser):
                 if post_header_index.lower() == 'set-cookie':
                     cookie_name, cookie_value = post_header_value.split(';')[0].split('=')
                     lms_cookies[cookie_name.strip()] = cookie_value.strip()
-            with open(OUTPUT3_DIR, 'w', encoding='utf-8') as f:
-                for post_header_index, post_header_value in postRespond.headers.items():
-                    f.write(f'{post_header_index}:\t{post_header_value}\n')
-                f.write(f'{postRespond.text}')
+            if SAVE_RESPONSE:
+                with open(OUTPUT3_DIR, 'w', encoding='utf-8') as f:
+                    for post_header_index, post_header_value in postRespond.headers.items():
+                        f.write(f'{post_header_index}:\t{post_header_value}\n')
+                    f.write(f'{postRespond.text}')
             video_num_str = self.form_action_url.split('/')[-2]
             # Getting JSON
             print('\t\t\t\tgetting json')
@@ -260,8 +275,9 @@ class VideoParser(HTMLParser):
                     print(e)
             # Downloading Video
             jsonifiedRespond = json.loads(jsGetRespond.text)
-            with open(OUTPUT4_DIR, 'w', encoding='utf-8') as f:
-                f.write(f'{jsGetRespond.text}')
+            if SAVE_RESPONSE:
+                with open(OUTPUT4_DIR, 'w', encoding='utf-8') as f:
+                    f.write(f'{jsGetRespond.text}')
             if jsonifiedRespond['video']['resolutions']:
                 videoUrl = jsonifiedRespond['video']['resolutions'][-1]['src']
             else:
@@ -283,6 +299,12 @@ class VideoParser(HTMLParser):
                     print(e)
             database.update(item_id=self.item_id, finished=True)
             print(f"\t\t\t\tdownload completed")
+        elif (tag == 'h2'):
+            self.is_delayed = True
+    
+    def handle_data(self, data: str) -> None:
+        if(self.is_delayed):
+            self.delay_message += data.strip()
 
 class AttachmentParser(HTMLParser):
     '''
@@ -292,10 +314,10 @@ class AttachmentParser(HTMLParser):
     Usage:
     - AttachmentParser().feed(URL)
     '''
-
     item_id = 0
     incomingFilename = False
     filename = os.path.join(DOWNLOAD_DIR, DOWNLOAD_SUBDIR, 'downloads')
+    is_delayed = False
     def handle_starttag(self, tag, attrs) -> None:
         attrs_dict = dict(attrs)
         if (tag == 'h2'):
@@ -320,45 +342,73 @@ class AttachmentParser(HTMLParser):
                             print(e)
                     database.update(item_id=self.item_id, finished=True)
                     print(f"\t\t\t\tdownload completed")
+        elif (tag == 'div'):
+            if 'style' in attrs_dict:
+                if attrs_dict['style'] == 'margin: 10px 50px;':
+                    self.is_delayed = True
+    
+    def handle_endtag(self, tag: str) -> None:
+        if self.is_delayed:
+            self.is_delayed = False
     
     def handle_data(self, data: str) -> None:
+        if(self.is_delayed):
+            print('\t\t\t\t'+data.strip())
         if(self.incomingFilename):
             self.incomingFilename = False
             self.filename = legalize_filename(data)
 
 
 if __name__ == '__main__':
-    #-----------------------------
-    # headers
-    #-----------------------------
-    headers = {}
-    with open(HEADER_DIR, 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            line_args = line.split(':')
-            key = line_args[0].strip()
-            value = ':'.join(line_args[1:]).strip()
-            headers[key] = value
-        with open(COOKIE_DIR, 'r') as f:
-            raw_cookie = ''.join(f.readlines())
-            headers['Cookie'] = raw_cookie
+    for COURSE_NUM in COURSE_NUMS:
+        PATH = '/courses/' + COURSE_NUM
+        URL = HOST+PATH
 
-    post_headers = {}
+        DOWNLOAD_DIR = os.path.join(WORKING_DIR, 'Download', COURSE_NUM)
+        DOWNLOAD_SUBDIR = 'default'
+        try:
+            os.mkdir(os.path.join(WORKING_DIR, 'Download'))
+        except FileExistsError:
+            pass
+        try:
+            os.mkdir(DOWNLOAD_DIR)
+        except FileExistsError:
+            pass
 
-    #-----------------------------
-    # get course homepage response
-    #-----------------------------
-    s = requests.Session()
+        #-----------------------------
+        # headers
+        #-----------------------------
+        headers = {}
+        with open(HEADER_DIR, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                line_args = line.split(':')
+                key = line_args[0].strip()
+                value = ':'.join(line_args[1:]).strip()
+                headers[key] = value
+            with open(COOKIE_DIR, 'r') as f:
+                raw_cookie = ''.join(f.readlines())
+                headers['Cookie'] = raw_cookie
 
-    r = s.get(URL, headers=headers)
+        post_headers = {}
 
-    with open(OUTPUT1_DIR, 'w', encoding='utf-8') as f:
-        f.write(r.text)
+        #-----------------------------
+        # get course homepage response
+        #-----------------------------
+        s = requests.Session()
 
-    #-----------------------------
-    # main
-    #-----------------------------
-    parser0 = HomepageParser()
-    parser0.feed(r.text)
-    if(not parser0.foundContent):
-        print('Nothing found!  Maybe check your cookie?')
+        r = s.get(URL, headers=headers)
+
+        if SAVE_RESPONSE:
+            with open(OUTPUT1_DIR, 'w', encoding='utf-8') as f:
+                f.write(r.text)
+
+        #-----------------------------
+        # main
+        #-----------------------------
+        parser0 = HomepageParser()
+        parser0.feed(r.text)
+        if(not parser0.foundContent):
+            print('Nothing found!')
+            print('\tMaybe check your cookie?')
+            print('\tOr perhaps you don\'t have the right to visit the page')
