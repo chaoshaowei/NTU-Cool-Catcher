@@ -27,7 +27,7 @@ git pull https://github.com/chaoshaowei/NTU-Cool-Catcher.git
 4. 找到 ```cool.ntu.edu.tw```
 5. 將Cookie的所有資訊，複製到 ```cookie.txt``` 中
 
-![image](https://imgur.com/a/33zchgC)
+![Imgur Image](https://imgur.com/a/33zchgC.png)
 
 ### 選擇下載之課程
 目前只能在程式碼中，修改```COURSE_NUMS```變數
