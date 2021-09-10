@@ -360,6 +360,7 @@ class AttachmentParser(HTMLParser):
 
 
 if __name__ == '__main__':
+    database.check_db()
     for COURSE_NUM in COURSE_NUMS:
         PATH = '/courses/' + COURSE_NUM
         URL = HOST+PATH
