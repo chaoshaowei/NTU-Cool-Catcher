@@ -1,5 +1,5 @@
 # NTU-Cool-Catcher
-[NTU COOL](https://cool.ntu.edu.tw/)(NTU COurse ONline)教學資源下載工具，一次性下載指定課程的所有內容，包括檔案和影片。
+[NTU COOL](https://cool.ntu.edu.tw/)(NTU COurse OnLine)教學資源下載工具，一次性下載指定課程的所有內容，包括檔案和影片。
 
 ## 取得
 本專案使用[Python3](https://www.python.org/downloads/)，請確認已經安裝
